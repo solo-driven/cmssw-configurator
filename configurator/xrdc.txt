@@ -1,0 +1,6 @@
+EOS_REDIRECTOR = "eosuser"
+#or, as an alternative
+#EOS_REDIRECTOR = "eoscms"
+REDIRECTOR = "root://"+EOS_REDIRECTOR+".cern.ch/"
+
+xrdcp FILE_URL_TO_COPY new_file_name

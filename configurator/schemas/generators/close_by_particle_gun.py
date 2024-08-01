@@ -2,7 +2,7 @@ from typing_extensions import Annotated, TypeVar
 from pydantic import BaseModel, Discriminator, Field, Tag, ValidationError, ValidationInfo, conlist, model_validator
 from typing import Any, List, Optional, Union, Tuple, FrozenSet
 from pydantic import field_validator, ConfigDict
-from configurator.schemas.particles import  Particle, PARTICLES
+from configurator.particles import  Particle, PARTICLES
 from pydantic.functional_validators import AfterValidator, BeforeValidator
 from typing import Generic, TypeVar, Union,  get_args, get_origin
 
@@ -182,29 +182,29 @@ def get_particle_ids(particle_ids):
 class ParticleGunParameters(BaseModel):
     model_config = ConfigDict(extra='forbid', use_enum_values=True)
     
-    controlled_by_eta: SingleOrMultiple[bool] = False
-    max_var_spread: SingleOrMultiple[bool] = False
-    delta: SingleOrMultiple[float] = 10.0
-    flat_pt_generation: SingleOrMultiple[bool] = False
-    pointing: SingleOrMultiple[bool] = True
-    overlapping: SingleOrMultiple[bool] = False
-    random_shoot: SingleOrMultiple[bool] = False
-    use_delta_t: SingleOrMultiple[bool] = False
+    controlled_by_eta: SingleOrMultiple[bool] = Field(default=True, )
+    max_var_spread: SingleOrMultiple[bool] = Field(default=False, )
+    delta: SingleOrMultiple[float] = Field(default=10.0, )
+    flat_pt_generation: SingleOrMultiple[bool] = Field(default=False, )
+    pointing: SingleOrMultiple[bool] = Field(default=True, )
+    overlapping: SingleOrMultiple[bool] = Field(default=False, )
+    random_shoot: SingleOrMultiple[bool] = Field(default=False, )
+    use_delta_t: SingleOrMultiple[bool] = Field(default=False, )
 
-    eta: SingleOrMultiple[Range] = (1.7, 2.7)
-    phi: SingleOrMultiple[Range] = (-3.14159265359, 3.14159265359)
-    r: SingleOrMultiple[Range] = (54.99, 55.01)
-    t: SingleOrMultiple[Range] = (0.0, 0.05)
-    var: SingleOrMultiple[Range] = (25.0, 200.0)
-    z: SingleOrMultiple[Range] = (320.99, 321.01)
+    eta: SingleOrMultiple[Range] = Field(default=(1.7, 2.7), )
+    phi: SingleOrMultiple[Range] = Field(default=(-3.14159265359, 3.14159265359), )
+    r: SingleOrMultiple[Range] = Field(default=(54.99, 55.01), )
+    t: SingleOrMultiple[Range] = Field(default=(0.0, 0.05), )
+    var: SingleOrMultiple[Range] = Field(default=(25.0, 200.0), )
+    z: SingleOrMultiple[Range] = Field(default=(320.99, 321.01), )
 
-    n_particles: SingleOrMultiple[int] = 1
-    offset_first: SingleOrMultiple[float] = 0.0
+    n_particles: SingleOrMultiple[int] = Field(default=1, )
+    offset_first: SingleOrMultiple[float] = Field(default=0.0, )
 
     particle_ids: Annotated[
         SingleOrMultiple[UniqueTuple[Particle]],
         AfterValidator(get_particle_ids),
-    ] = Field(default_factory=lambda: ("GAMMA",), validate_default=True)
+    ] = Field(default = ("GAMMA",), )
 
 
 

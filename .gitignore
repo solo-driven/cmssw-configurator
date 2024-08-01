@@ -1,4 +1,6 @@
 __pycache__/
 .pytest_cache/
+.configurator-cache/
 CMSSW_*/
 venv/
+law_out/

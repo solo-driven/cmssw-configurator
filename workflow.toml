@@ -6,9 +6,8 @@ pileup = false
 geometry = "D110"
 #process_modifier = "ticl_v3"
 
-[parameters]
-num_events = 20
-
+[workflow]
+num_events = 1000
 
 [generator]
 verbosity = 0
@@ -16,12 +15,8 @@ first_run = 1
 psethack = "random particles in phi and r windows"
 
 [generator.parameters]
-particle_ids = [["PROTON", "GAMMA"], ["ELECTRON", "PROTON"]]
-delta = [10, 1, 4, 5]
-flat_pt_generation = [false, true]
-eta = [[1.0, 2.0], [2 , 4] , [4, 6]]
-
-
-
-
+# particle_ids = [["PROTON", "GAMMA"], ["ELECTRON", "PROTON"]]
+delta = [4, 5]
+# flat_pt_generation = [false, true]
+# eta = [[1.0, 2.0], [2 , 4] , [4, 6]]
 

@@ -5,25 +5,8 @@ from configurator.workflow_specs_mapper import grep_mapper
 import subprocess
 from configurator.schemas.workflow import Workflow
 
+from configurator.utils import run_with_setup
 
-
-
-def run_with_setup(command:str, **kwargs) -> subprocess.CompletedProcess:
-    """
-    A wrapper around subprocess.run to execute a command with a setup command sourced beforehand.
-
-    :param command: The main command to run.
-    :param kwargs: Additional keyword arguments to pass to subprocess.run.
-    :return: The result of subprocess.run.
-    """ 
-    global src_path
-
-    init_command = f"source /cvmfs/cms.cern.ch/cmsset_default.sh && source ~/.bashrc && cmsenv"
-    # Combine the setup command with the main command
-    full_command = f"cd \"{src_path}\" && {init_command} && {command}"
-    
-    # Execute the combined command using subprocess.run
-    return subprocess.run(full_command, shell=True,  **kwargs)
 
 
 # Configure logging
@@ -38,8 +21,12 @@ try:
         import json
         logging.info(json.dumps(conf, indent=4))
         if conf is not None:
-            conf = Workflow(**conf).model_dump()
-       
+            workflow = Workflow(**conf)
+            conf = workflow.model_dump()
+            # as every value is a list, we take the first element which will then be update by the combination
+            set_conf = workflow.model_dump(exclude_unset=True)
+
+
     logging.info("Successfully loaded workflow.toml.")
 except Exception as e:
     logging.error("Failed to load workflow.toml.", exc_info=True)
@@ -74,7 +61,7 @@ else:
 
 src_path = os.path.join(release_path, "src")
 
-result = run_with_setup("cmsenv", text=True)
+result = run_with_setup("cmsenv", src_path=src_path, text=True)
 
 if result.returncode != 0:
     logging.error(f"Failed to execute cmsenv: {result.stderr}")
@@ -106,7 +93,7 @@ if not os.path.exists(workflows_file):
     command = "runTheMatrix.py -w upgrade -n"
 
     # Execute the command and capture the output
-    result = run_with_setup(command, capture_output=True, text=True)
+    result = run_with_setup(command, src_path=src_path, capture_output=True, text=True)
 
     # Check if the command was successful
     if result.returncode == 0:
@@ -160,7 +147,7 @@ else:
         if pattern and pattern is not None:
             grep_command += f" | grep '{pattern}'"
     
-    result = run_with_setup(grep_command, capture_output=True, text=True)
+    result = run_with_setup(grep_command,src_path=src_path, capture_output=True, text=True)
     if result.returncode == 0:
         if result.stdout == "":
             raise ValueError("No workflows found with the specified specs.")
@@ -203,7 +190,7 @@ workflow_dir = get_workflow_dir(workflow_id)
 
 if not workflow_dir:
     logging.info(f"Pulling the workflow {workflow_id}")
-    result = run_with_setup(f"runTheMatrix.py -w upgrade -l {workflow_id} -j 0", text=True, capture_output=True)
+    result = run_with_setup(f"runTheMatrix.py -w upgrade -l {workflow_id} -j 0", src_path=src_path, text=True, capture_output=True)
     if result.returncode == 0:
         logging.info(result.stdout)
         workflow_dir = get_workflow_dir(workflow_id)
@@ -214,92 +201,69 @@ else:
     logging.info(f"Workflow {workflow_id} already exists in the {workflow_dir}")
 
 
+
+
+
 # If multiple paramters past ie lists then copy the dir and rename it based on the params 
-# 4.1 create workflow files from the list of files
-
-
-
-
-
-
-def step0(file_path, generator_code):
-
-
-    def remove_and_insert_block(file_path, block_start_string, insert_string, rewrite=True, 
-                                configurer_start_flag="\n### START ADDED BY CONFIGURATOR ###", 
-                                configurer_end_flag="### END ADDED BY CONFIGURATOR ###\n"):
-        
-        with open(file_path, 'r') as file:
-            content = file.read()
-
-        
-        # Create the new configuration block with flags
-        config_block = f"{configurer_start_flag}\n{insert_string}\n{configurer_end_flag}"
-        
-        
-        # Check if the configurator block already exists
-        start_flag_index = content.find(configurer_start_flag)
-        end_flag_index = content.find(configurer_end_flag)
-        
-        if start_flag_index != -1 and end_flag_index != -1:
-            if not rewrite:
-                print("Configurator block already exists.")
-                return
-
-            # Insert the new configuration block at the original block's location
-            modified_content = content[:start_flag_index] + config_block + content[end_flag_index + len(configurer_end_flag):]
-
-        else:
-            # Find the start of the block
-            start_index = content.find(block_start_string) 
-            if start_index == -1:
-                print(f"Block starting with '{block_start_string}' not found.")
-                return
-            
-            # Count parentheses to find the matching closing one
-            open_parentheses = 0
-            end_index = -1
-            for i, char in enumerate(content[start_index:], start=start_index):
-                if char == '(':
-                    open_parentheses += 1
-                elif char == ')':
-                    open_parentheses -= 1
-                    if open_parentheses == 0:
-                        # Found the matching closing parenthesis
-                        end_index = i + 1
-                        break
-            
-            if end_index == -1:
-                print("Matching closing parenthesis not found.")
-                return
-            
-            # Insert the new configuration block at the original block's location
-            modified_content = content[:start_index] + config_block + content[end_index:]
-        
-        # Write the modified content back to the file
-        with open(file_path, 'w') as file:
-            file.write(modified_content)
-
-    remove_and_insert_block(file_path, "process.generator", generator_code, rewrite=True)
-
-
-def get_step0_file(workflow_dir):
-    import glob
-    # Construct the search pattern to match all files ending with .py
-    search_pattern = os.path.join(workflow_dir, '*.py')
-    
-    for python_file in glob.glob(search_pattern):
-        if not python_file.startswith("step"):
-            return python_file
-    
-
-step0_file = get_step0_file(workflow_dir)
-
-from configurator.modifiers.close_by_particle_gun_modifier import generator_string
-if step0_file:
-    logging.info(f"Found the step0 file: {step0_file}")
-    logging.info("Modifying generator in step0 file.")
-
-    step0(step0_file, generator_string(conf["generator"]))
+# create a dir for each parameter combination
+combinations_dir = "combinations"
+combinations_dir_path = os.path.join(os.path.dirname(workflow_dir), combinations_dir)
+if not os.path.exists(combinations_dir_path):
+    os.makedirs(combinations_dir_path)
+    logging.info(f"Directory for parameter combinations created at {combinations_dir_path}")
 else:
-    logging.error("Could not find the step0 file")
+    logging.info(f"Directory for parameter combinations already exists at {combinations_dir_path}")
+os.chdir(combinations_dir_path)
+
+# for each parameter combination create its own dir and copy the workflow dir to it
+from configurator.utils import get_parameter_combination, generate_dir_name, get_step0_file
+import shutil
+from configurator.steps import step0
+
+for param_dict in get_parameter_combination(set_conf["generator"]["parameters"]):
+    param_dir_path = os.path.join(combinations_dir_path, generate_dir_name(param_dict))
+
+    if not os.path.exists(param_dir_path):
+        shutil.copytree(workflow_dir, param_dir_path)
+        logging.info(f"Directory for parameter combination created at {param_dir_path}")
+    else:
+        logging.info(f"Directory for parameter combination already exists at {param_dir_path}")
+    
+    # Modify the generator in the step0 file
+    step0_file = get_step0_file(param_dir_path)
+
+    if not step0_file:
+        logging.error("Could not find the step0 file")
+        raise FileNotFoundError(f"Could not find the step0 file in {param_dir_path}")
+    else:
+        logging.info(f"Found the step0 file: {step0_file}")
+
+    logging.info("Modifying generator in step0 file.")
+    conf['generator']['parameters'].update(param_dict)
+
+    step0(step0_file, conf['generator'], conf['specs']['type'])
+    
+
+    
+
+    
+
+    
+
+    
+
+
+
+
+    
+
+# step0_file = get_step0_file(workflow_dir)
+
+# from configurator.modifiers.close_by_particle_gun_modifier import generator_string
+# if step0_file:
+#     logging.info(f"Found the step0 file: {step0_file}")
+#     logging.info("Modifying generator in step0 file.")
+
+#     step0(step0_file, generator_string(conf["generator"]))
+# else:
+#     logging.error("Could not find the step0 file")
