@@ -4,3 +4,6 @@ __pycache__/
 CMSSW_*/
 venv/
 law_out/
+$*/
+data/
+.law/

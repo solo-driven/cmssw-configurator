@@ -80,6 +80,10 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
         if self.htcondor_group and self.htcondor_group != law.NO_STR:
             config.custom_content.append(("+AccountingGroup", self.htcondor_group))
+        
+
+
+        config.input_files["workflow.toml"] = law.JobInputFile("workflow.toml", share=True, render=False)
 
 
         # the CERN htcondor setup requires a "log" config, but we can safely set it to /dev/null

@@ -261,10 +261,13 @@ class CreateCombinationTask(SrcTask):
 
 
     def requires(self):
-        return {
+        reqs = super().requires()
+        reqs.update({
             "combinations_dir": CreateCombinationsDirTask.req(self, release=self.workflow_specs['release']),
             "workflow_dir": GetCMSWorkflowTask.req(self, **self.workflow_specs)
-        }
+        })
+
+        return reqs
     
 
     def output(self):
@@ -297,8 +300,8 @@ class CreateCombinationTask(SrcTask):
 
 from configurator.law_task.my_htcondor import HTCondorWorkflow
 
-class CreateCombinationsTask(SrcTask, HTCondorWorkflow, law.LocalWorkflow):
-    workflow_file = law.Parameter(default="workflow.toml")
+class CreateCombinationsTask(SrcTask,  law.LocalWorkflow):
+    workflow_file = luigi.parameter.PathParameter(default="/afs/cern.ch/user/y/yaskari/cmssw_configurator_project/workflow.toml")
     step = luigi.IntParameter(default=1)
     n_jobs = luigi.IntParameter(default=1)
 
@@ -307,15 +310,10 @@ class CreateCombinationsTask(SrcTask, HTCondorWorkflow, law.LocalWorkflow):
     workaround_is_complete = False
 
     def create_branch_map(self):
-        return [1]
-
-    def requires(self):
         import tomli
         from configurator.schemas.workflow import Workflow
 
-        reqs = super().requires()
-
-        with open(self.workflow_file, 'rb') as f:
+        with self.workflow_file.open('rb') as f:
             conf = tomli.load(f)
         
         if conf is None:
@@ -327,30 +325,30 @@ class CreateCombinationsTask(SrcTask, HTCondorWorkflow, law.LocalWorkflow):
 
         from configurator.utils import get_parameter_combination, generate_dir_name
 
-        create_combinaions_tasks = []
+        branches_data = []
         for param_dict in get_parameter_combination(set_conf["generator"]["parameters"]):
             out_dir_name = generate_dir_name(param_dict)
             conf['generator']['parameters'].update(param_dict)
 
-            create_combinaions_tasks.append(CreateCombinationTask(
+            branches_data.append(dict(
                 workflow_specs=set_conf['specs'],
                 generator_params=conf['generator'],
                 out_dir_name=out_dir_name
             )) 
 
-        reqs['combinations'] = create_combinaions_tasks
 
-        return reqs
-
-        
-    def complete(self):
-        return self.workaround_is_complete
+        return branches_data
     
-    def workflow_complete(self):
-        return self.workaround_is_complete
+    def requires(self):
+        reqs = super().requires()
+        reqs.update({
+            "combination_task": CreateCombinationTask(**self.branch_data)
+        })
+        return reqs
     
     def output(self):
-        return self.htcondor_output_directory()
+        combination_task_dir_name = os.path.basename(self.input()['combination_task'].path)
+        return law.LocalFileTarget(os.path.join(self.src_path, "roots", combination_task_dir_name,  f"step{self.step}.root"))
 
     def run(self):
         self.workaround_is_complete = True
@@ -358,10 +356,25 @@ class CreateCombinationsTask(SrcTask, HTCondorWorkflow, law.LocalWorkflow):
 
         assert self.step >= 1, "Step must be greater than or equal to 1."
 
-        for i in self.input():
-            if self.step == 1:
-                step1_file = get_step0_file(i.path)
-                subprocess.run(f"cmsRun -n {self.n_jobs} {step1_file} seed=$RANDINT" )
+        i = self.input()['combination_task']
+        dir_to_save_step_root = os.path.join(self.src_path, "roots", os.path.basename(i.path))
+        
+        if self.step == 1:
+            step1_file = get_step0_file(i.path)
+            # change the seed
+
+            os.makedirs(dir_to_save_step_root, exist_ok=True)
+            out = run_with_setup(f"cmsRun -n {self.n_jobs} {step1_file} seed=42", src_path= dir_to_save_step_root , text=True, capture_output=True)
+           
+       
+            # error
+            if out.returncode != 0:
+                self.workaround_is_complete = False
+                self.publish_message(f"stderr is:  {out.stderr}")
+                raise Exception("cmsRun failed.")
+            else:
+                self.publish_message(f"Step 1: {out.stdout}")
+
         
 
 

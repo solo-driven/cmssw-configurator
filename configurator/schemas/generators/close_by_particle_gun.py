@@ -204,7 +204,7 @@ class ParticleGunParameters(BaseModel):
     particle_ids: Annotated[
         SingleOrMultiple[UniqueTuple[Particle]],
         AfterValidator(get_particle_ids),
-    ] = Field(default = ("GAMMA",), )
+    ] = Field(default = ("GAMMA",), validate_default=True)
 
 
 
