@@ -257,8 +257,6 @@ class GetCMSWorkflowTask(SrcTask):
         return ""
     
     def complete(self):
-        print("#"*100)
-        print("running complete of GetCMSWorkflowTask")
         try:
             if not self.workflow_id:
                 self.workflow_id = self.get_workflow_id()
@@ -272,7 +270,12 @@ class GetCMSWorkflowTask(SrcTask):
     def output(self):
 
         if not self.workflow_id:
-            self.workflow_id = self.get_workflow_id()
+            try:
+                self.workflow_id = self.get_workflow_id()
+            except FileNotFoundError:
+                # means that previous requierment did not run so return a dummy target
+                #  to ensure that requirements will run and no exception will be raised
+                return law.LocalDirectoryTarget("NULL")
 
         workflow_dir = self.get_workflow_dir(self.workflow_id)
         if not workflow_dir:
@@ -328,7 +331,6 @@ class CreateCombinationTask(SrcTask):
         try:
             out = self.output()
             if not os.path.exists(out.path):
-                print("output does not exist")
                 return False
             return True
         except (FileNotFoundError, ValueError):
@@ -361,6 +363,8 @@ class CMSRunTask(SrcTask,  law.LocalWorkflow):
 
     n_jobs = luigi.IntParameter(default=4)
     step = luigi.IntParameter(default=1)
+    workaround_is_complete = False
+
 
 
     def create_branch_map(self):
@@ -401,17 +405,12 @@ class CMSRunTask(SrcTask,  law.LocalWorkflow):
 
 
         if self.step > 1:
-            print(f"\n In if statement {self.step=} \n ")
-
             reqs.update({
                 f"step_{self.step}_task": CMSRunTask.req(self, step=self.step - 1)
             })
 
         return reqs
     
-
-    step = luigi.IntParameter(default=1)
-    workaround_is_complete = False
 
 
     def output(self):
@@ -426,9 +425,6 @@ class CMSRunTask(SrcTask,  law.LocalWorkflow):
             return True
         except (FileNotFoundError, ValueError):
             return False
-        
-    def workflow_complete(self):
-        return self.workaround_is_complete
     
 
     def get_step_file(self):
@@ -470,9 +466,12 @@ class CMSRunTask(SrcTask,  law.LocalWorkflow):
             self.publish_message(f"stderr is:  {out.stderr}")
             raise Exception(f"cmsRun failed. From command {command}")
         else:
-            self.publish_message(f"Step {self.step}: {out.stdout}")
+            self.publish_message(f"Step {self.step}\:\n{out.stdout}")
 
         self.workaround_is_complete = True
+
+    def workflow_complete(self):
+        return self.workaround_is_complete
     
 
         
