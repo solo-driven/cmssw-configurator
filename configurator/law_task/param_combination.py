@@ -53,12 +53,57 @@ class GetCmsReleaseTask(law.Task):
             logging.error(f"Error occurred while creating the release: {result.stderr}")
             raise Exception(f"Error occurred while creating the release: {result.stderr}")
 
-class SrcTask(law.Task):
-    release = law.Parameter(default="CMSSW_14_1_0_pre4")
+
+import tarfile
+
+class GetCmsReleaseDirFromTarTask(law.Task):
+    tar_file = law.Parameter(default="CMSSW_14_1_0_pre4.tar")
+
+
+    @property
+    def release(self):
+        # when extracting the tar file folder with its name will be created
+        return  os.path.splitext(os.path.basename(self.tar_file))[0]
 
     def requires(self):
+        return CreateConfiguratorCachDirTask.req(self)
+
+    def output(self):
+        out_dir = os.path.join(workspace_dir, self.release)
+
+        return law.LocalDirectoryTarget(out_dir)
+    
+
+    def run(self):
+        # Ensure the extraction directory exists
+        os.makedirs(workspace_dir, exist_ok=True)
+
+        # Unzip the tar file
+        with tarfile.open(self.tar_file, 'r:*') as tar_ref:
+            tar_ref.extractall(workspace_dir)
+
+        
+
+
+ 
+class SrcTask(law.Task):
+
+    tar_file = luigi.PathParameter(default="CMSSW_14_1_0_pre4.tar", exists=True)
+    release = law.Parameter(default="CMSSW_14_1_0_pre4")
+    
+
+    def subprocess_run(self, command:str, **kwargs):
+        from_tar = self.tar_file is not None
+        src_path = kwargs.pop("src_path", self.src_path)
+        return run_with_setup(command, src_path = src_path, from_tar = from_tar, **kwargs)
+
+
+    def requires(self):
+        self.release = self.release if not self.tar_file else os.path.splitext(os.path.basename(self.tar_file))[0]
+
         return {
-            "cms_release_dir": GetCmsReleaseTask.req(self, release=self.release),
+            "cms_release_dir": GetCmsReleaseTask.req(self, release=self.release) \
+                if not self.tar_file else GetCmsReleaseDirFromTarTask.req(self, tar_file=self.tar_file),
         }
 
     @property
@@ -78,12 +123,11 @@ class CashCMSReleaseWorkflowsTask(SrcTask):
         return law.LocalFileTarget(os.path.join(self.input()['cash_release_dir'].path, "workflows.txt"))
     
     def run(self):
-        from configurator.utils import run_with_setup
 
         command = "runTheMatrix.py -w upgrade -n"
          
         # Execute the command and capture the output
-        result = run_with_setup(command, src_path=self.src_path, capture_output=True, text=True)
+        result = self.subprocess_run(command, capture_output=True, text=True)
 
         # Check if the command was successful
         if result.returncode == 0:
@@ -155,7 +199,7 @@ class CashSpecifiedWorkflowsTask(SrcTask):
             if pattern and pattern is not None:
                 grep_command += f" | grep '{pattern}'"
         
-        result = run_with_setup(grep_command, src_path=self.src_path, capture_output=True, text=True)
+        result = self.subprocess_run(grep_command, capture_output=True, text=True)
         if result.returncode == 0:
             if result.stdout == "":
                 raise ValueError("No workflows found with the specified specs.")
@@ -192,8 +236,15 @@ class GetCMSWorkflowTask(SrcTask):
 
         """
         with self.input()['cash_specified_workflows'].open('r') as file:
-            content = file.read()
-            return content.split('\n', maxsplit=1)[0].split(' ', maxsplit=1)[0]
+            for line in file.readlines():
+                id_ = line.split(' ', maxsplit=1)[0]
+                try:
+                    return str(float(id_))
+                except ValueError:
+                    continue
+
+        raise ValueError("Workflow ID not found.")
+                
 
     def get_workflow_dir(self, workflow_id: str) -> str:
         for dir in os.listdir(self.src_path):
@@ -234,7 +285,7 @@ class GetCMSWorkflowTask(SrcTask):
         if not self.workflow_id:
             self.workflow_id = self.get_workflow_id()
 
-        result = run_with_setup(f"runTheMatrix.py -w upgrade -l {self.workflow_id} -j 0", src_path=self.src_path, text=True, capture_output=True)
+        result = self.subprocess_run(f"runTheMatrix.py -w upgrade -l {self.workflow_id} -j 0", text=True, capture_output=True)
         if result.returncode == 0:
             logging.info(result.stdout)
 
@@ -286,28 +337,31 @@ class CreateCombinationTask(SrcTask):
     def run(self):
         import shutil
         from configurator.steps import step0
-        from configurator.utils import get_step0_file
+        from configurator.utils import get_step1_file
         param_dir_path = self.output().path
 
         if not os.path.exists(param_dir_path):
             shutil.copytree(self.input()['workflow_dir'].path, param_dir_path)
 
 
-        step0_file = get_step0_file(param_dir_path)
+        step0_file = get_step1_file(param_dir_path)
         step0(step0_file, self.generator_params, self.workflow_specs['type'])
 
 
 
 from configurator.law_task.my_htcondor import HTCondorWorkflow
 
-class CreateCombinationsTask(SrcTask,  law.LocalWorkflow):
-    workflow_file = luigi.parameter.PathParameter(default="/afs/cern.ch/user/y/yaskari/cmssw_configurator_project/workflow.toml")
-    step = luigi.IntParameter(default=1)
-    n_jobs = luigi.IntParameter(default=1)
 
-    # this attribute is used to check if the workflow is "complete" which always makes sure that the workflow is run
-    # which just yields other tasks to be run
-    workaround_is_complete = False
+class CMSRunTask(SrcTask,  law.LocalWorkflow):
+
+    workflow_file = luigi.parameter.PathParameter(
+        default="/afs/cern.ch/user/y/yaskari/cmssw_configurator_project/workflow.toml",
+        exists=True
+    )
+
+    n_jobs = luigi.IntParameter(default=4)
+    step = luigi.IntParameter(default=1)
+
 
     def create_branch_map(self):
         import tomli
@@ -342,38 +396,84 @@ class CreateCombinationsTask(SrcTask,  law.LocalWorkflow):
     def requires(self):
         reqs = super().requires()
         reqs.update({
-            "combination_task": CreateCombinationTask(**self.branch_data)
+            "combination_task": CreateCombinationTask.req(self, **self.branch_data)
         })
+
+
+        if self.step > 1:
+            print(f"\n In if statement {self.step=} \n ")
+
+            reqs.update({
+                f"step_{self.step}_task": CMSRunTask.req(self, step=self.step - 1)
+            })
+
         return reqs
     
+
+    step = luigi.IntParameter(default=1)
+    workaround_is_complete = False
+
+
     def output(self):
         combination_task_dir_name = os.path.basename(self.input()['combination_task'].path)
         return law.LocalFileTarget(os.path.join(self.src_path, "roots", combination_task_dir_name,  f"step{self.step}.root"))
+    
+    def complete(self):
+        try:
+            out = self.output()
+            if not os.path.exists(out.path):
+                return False
+            return True
+        except (FileNotFoundError, ValueError):
+            return False
+        
+    def workflow_complete(self):
+        return self.workaround_is_complete
+    
+
+    def get_step_file(self):
+        i = self.input()['combination_task']
+        import glob
+
+        # Check the value of self.step to determine the search pattern
+        if self.step == 1:
+            # For step 1, match all .py files
+            python_file_pattern = os.path.join(i.path, '*.py')
+            for python_file in glob.glob(python_file_pattern):
+                if not python_file.startswith("step"):
+                    return python_file
+        else:
+            # For other steps, match files starting with 'step{self.step}' and ending with .py
+            python_file_pattern = os.path.join(i.path, f'step{self.step}*.py')
+            for python_file in glob.glob(python_file_pattern):
+                return python_file
+
 
     def run(self):
-        self.workaround_is_complete = True
-        from configurator.utils import get_step0_file
-
-        assert self.step >= 1, "Step must be greater than or equal to 1."
-
-        i = self.input()['combination_task']
-        dir_to_save_step_root = os.path.join(self.src_path, "roots", os.path.basename(i.path))
+        dir_to_save_step_root = os.path.dirname(self.output().path)
         
-        if self.step == 1:
-            step1_file = get_step0_file(i.path)
-            # change the seed
+        step_file = self.get_step_file()
 
-            os.makedirs(dir_to_save_step_root, exist_ok=True)
-            out = run_with_setup(f"cmsRun -n {self.n_jobs} {step1_file} seed=42", src_path= dir_to_save_step_root , text=True, capture_output=True)
-           
-       
-            # error
-            if out.returncode != 0:
-                self.workaround_is_complete = False
-                self.publish_message(f"stderr is:  {out.stderr}")
-                raise Exception("cmsRun failed.")
-            else:
-                self.publish_message(f"Step 1: {out.stdout}")
+        os.makedirs(dir_to_save_step_root, exist_ok=True)
+
+        if self.step == 1:
+            command = f"cmsRun {step_file} -n {self.n_jobs} seed=42"
+        else:
+            command = f"cmsRun {step_file} inputFile={self.input()[f'step_{self.step}_task'].path}  -n {self.n_jobs} seed=42"
+        
+
+        out = self.subprocess_run(command, src_path=dir_to_save_step_root, text=True, capture_output=True)
+
+        # error
+        if out.returncode != 0:
+            self.workaround_is_complete = False
+            self.publish_message(f"stderr is:  {out.stderr}")
+            raise Exception(f"cmsRun failed. From command {command}")
+        else:
+            self.publish_message(f"Step {self.step}: {out.stdout}")
+
+        self.workaround_is_complete = True
+    
 
         
 

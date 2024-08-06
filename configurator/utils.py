@@ -6,19 +6,25 @@ from configurator.particles import PARTICLE_IDS
 
 import subprocess
 
-def run_with_setup(command:str, src_path: str, **kwargs) -> subprocess.CompletedProcess:
+def run_with_setup(command:str, src_path:str,  from_tar = False, **kwargs) -> subprocess.CompletedProcess:
     """
     A wrapper around subprocess.run to execute a command with a setup command sourced beforehand.
 
     :param command: The main command to run.
+    :param src_path: The path to the source directory.
+    :param tar_dir: if src is extracted from tar file, set this to True
     :param kwargs: Additional keyword arguments to pass to subprocess.run.
     :return: The result of subprocess.run.
     """ 
   
+    if from_tar:
+        init_command = f"source /cvmfs/cms.cern.ch/cmsset_default.sh && source ~/.bashrc && cmsenv && scram b ProjectRename"
+    else:
+        init_command = f"source /cvmfs/cms.cern.ch/cmsset_default.sh && source ~/.bashrc && cmsenv"
 
-    init_command = f"source /cvmfs/cms.cern.ch/cmsset_default.sh && source ~/.bashrc && cmsenv"
     # Combine the setup command with the main command
     full_command = f"cd \"{src_path}\" && {init_command} && {command}"
+    print(f"{full_command=}")
     
     # Execute the combined command using subprocess.run
     return subprocess.run(full_command, shell=True,  **kwargs)
@@ -91,7 +97,7 @@ def get_parameter_combination(parameters: dict):
 import glob
 import os
 
-def get_step0_file(workflow_dir):
+def get_step1_file(workflow_dir):
     # Construct the search pattern to match all files ending with .py
     search_pattern = os.path.join(workflow_dir, '*.py')
     

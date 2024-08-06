@@ -7,3 +7,5 @@ law_out/
 $*/
 data/
 .law/
+*tar
+info.txt
