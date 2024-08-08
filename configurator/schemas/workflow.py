@@ -1,5 +1,5 @@
 from typing import Any, Optional
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, conint, model_validator
 from enum import Enum, auto
 
 class Geometry(Enum):
@@ -55,8 +55,12 @@ class WorkflowSpecs(BaseModel):
     geometry: Geometry
     process_modifier: Optional[ProcessModifier] = None
 
+from pydantic import PositiveInt
+
 class WorkflowParameters(BaseModel):
-    num_events: Optional[int] = None
+    max_events: PositiveInt = 10
+    n_jobs: PositiveInt = 1
+    customize_step3: bool = False
 
 
 def snake_to_camel(name: str) -> str:

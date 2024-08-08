@@ -7,5 +7,9 @@ law_out/
 $*/
 data/
 .law/
-*tar
+*.tar
 info.txt
+*tgz
+roots/
+worksparse/
+release/

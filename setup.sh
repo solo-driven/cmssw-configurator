@@ -11,7 +11,14 @@ action() {
     export ANALYSIS_DATA_PATH="${ANALYSIS_PATH}/data"
 
 
+    export ROOTS_DIR="${this_dir}/roots"
+    export CONFIGURATOR_CACHE_DIR="~/.cmssw-configurator-cache"
+    export WORKSPACE_DIR="${this_dir}/release"
+    
+
+
     # source "/afs/cern.ch/user/m/mrieger/public/law_sw/setup.sh" ""
     source "$( law completion )" ""
+    law index --verbose
 }
 action

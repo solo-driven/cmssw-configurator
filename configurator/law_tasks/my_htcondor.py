@@ -3,7 +3,7 @@ import law
 import law.contrib
 import luigi
 
-from configurator.law_task.param_combination import SrcTask
+from configurator.law_tasks.param_combination import SrcTask
 
 
 

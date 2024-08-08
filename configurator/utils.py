@@ -17,13 +17,11 @@ def run_with_setup(command:str, src_path:str,  from_tar = False, **kwargs) -> su
     :return: The result of subprocess.run.
     """ 
   
-    if from_tar:
-        init_command = f"source /cvmfs/cms.cern.ch/cmsset_default.sh && source ~/.bashrc && cmsenv && scram b ProjectRename"
-    else:
-        init_command = f"source /cvmfs/cms.cern.ch/cmsset_default.sh && source ~/.bashrc && cmsenv"
+    init_command = f"source /cvmfs/cms.cern.ch/cmsset_default.sh && source ~/.bashrc && cmsenv"
 
     # Combine the setup command with the main command
     full_command = f"cd \"{src_path}\" && {init_command} && {command}"
+
     print(f"{full_command=}")
     
     # Execute the combined command using subprocess.run
@@ -103,4 +101,26 @@ def get_step1_file(workflow_dir):
     
     for python_file in glob.glob(search_pattern):
         if not python_file.startswith("step"):
+            return python_file
+        
+    
+def get_step_file(step, input_dir):
+    """
+    Utility function to get the appropriate step file based on the step number.
+
+    :param step: The step number to determine the search pattern.
+    :param input_dir: The path to search for the files.
+    :return: The path to the appropriate step file.
+    """
+    # Check the value of step to determine the search pattern
+    if step == 1:
+        # For step 1, match all .py files
+        python_file_pattern = os.path.join(input_dir, '*.py')
+        for python_file in glob.glob(python_file_pattern):
+            if not os.path.basename(python_file).startswith("step"):
+                return python_file
+    else:
+        # For other steps, match files starting with 'step{step}' and ending with .py
+        python_file_pattern = os.path.join(input_dir, f'step{step}*.py')
+        for python_file in glob.glob(python_file_pattern):
             return python_file
