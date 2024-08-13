@@ -4,24 +4,21 @@ type = "close_by_particle_gun"
 era = 2026
 pileup = false
 geometry = "D110"
-#process_modifier = "ticl_v3"
 
 [parameters]
 max_events = 50
 n_jobs = 4
 customize_step3 = false
 
-
 [generator]
 verbosity = 0
 first_run = 1
 psethack = "random particles in phi and r windows"
 
-
 [generator.parameters]
-# particle_ids = [["PROTON", "GAMMA"], ["ELECTRON", "PROTON"]]
+particle_ids = [["PROTON", "GAMMA"], ["ELECTRON", "PROTON"]]
 delta = [4, 5]
-# flat_pt_generation = [false, true]
-# eta = [[1.0, 2.0], [2 , 4] , [4, 6]]
+flat_pt_generation = false
+eta = [[1.0, 2.0], [2 , 4] , [4, 6]]
 
 

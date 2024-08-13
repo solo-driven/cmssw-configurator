@@ -272,8 +272,6 @@ class GetCMSWorkflowTask(SrcTask):
             return False
 
 
-
-
     def output(self):
 
             try:
@@ -348,7 +346,7 @@ class CreateCombinationTask(SrcTask):
 
     def run(self):
         import shutil
-        from configurator.steps import step1
+        from configurator.modifiers.steps import step1
         param_dir_path = self.output().path
 
         if not os.path.exists(param_dir_path):
@@ -358,14 +356,11 @@ class CreateCombinationTask(SrcTask):
         step1(step1_file, self.generator_params, max_events= self.workflow_params['max_events'], type=self.workflow_specs['type'])
 
         if  self.workflow_params['customize_step3']:
-            from configurator.steps import step3
+            from configurator.modifiers.steps import step3
 
             step3_file = get_step_file(3, param_dir_path)
             step3(step3_file)
 
-
-
-from configurator.law_tasks.my_htcondor import HTCondorWorkflow
 
 
 class CMSRunTask(SrcTask,  law.LocalWorkflow):
@@ -470,9 +465,9 @@ class CMSRunTask(SrcTask,  law.LocalWorkflow):
         os.makedirs(dir_to_save_step_root, exist_ok=True)
 
         if self.step == 1:
-            command = f"cd {dir_to_save_step_root} && cmsRun {step_file} -n {self.n_jobs} seed=42"
+            command = f"cd \"{dir_to_save_step_root}\" && cmsRun \"{step_file}\" -n {self.n_jobs} seed=42"
         else:
-            command = f"cd {dir_to_save_step_root} && cmsRun {step_file} inputFile={self.input()[f'step_{self.step}_task'].path}  -n {self.n_jobs} seed=42"
+            command = f"cd \"{dir_to_save_step_root}\" && cmsRun \"{step_file}\" inputFile=\"{self.input()[f'step_{self.step}_task'].path}\"  -n {self.n_jobs} seed=42"
 
 
         out = self.subprocess_run(command, text=True, capture_output=True)

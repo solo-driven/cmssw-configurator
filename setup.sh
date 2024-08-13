@@ -7,17 +7,10 @@ action() {
     export LAW_HOME="${this_dir}/.law"
     export LAW_CONFIG_FILE="${this_dir}/law.cfg"
 
-    export ANALYSIS_PATH="${this_dir}"
-    export ANALYSIS_DATA_PATH="${ANALYSIS_PATH}/data"
-
-
     export ROOTS_DIR="${this_dir}/roots"
     export CONFIGURATOR_CACHE_DIR="~/.cmssw-configurator-cache"
     export WORKSPACE_DIR="${this_dir}/release"
     
-
-
-    # source "/afs/cern.ch/user/m/mrieger/public/law_sw/setup.sh" ""
     source "$( law completion )" ""
     law index --verbose
 }

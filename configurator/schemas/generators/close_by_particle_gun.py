@@ -1,9 +1,9 @@
 from typing_extensions import Annotated, TypeVar
-from pydantic import BaseModel, Discriminator, Field, Tag, ValidationError, ValidationInfo, conlist, model_validator
-from typing import Any, List, Optional, Union, Tuple, FrozenSet
-from pydantic import field_validator, ConfigDict
-from configurator.particles import  Particle, PARTICLES
-from pydantic.functional_validators import AfterValidator, BeforeValidator
+from pydantic import BaseModel, Discriminator, Field, Tag, ValidationError
+from typing import Union, Tuple
+from pydantic import ConfigDict
+from configurator.schemas.particles import  Particle, PARTICLES
+from pydantic.functional_validators import AfterValidator
 from typing import Generic, TypeVar, Union,  get_args, get_origin
 
 
@@ -147,5 +147,3 @@ class CloseByParticleGun(BaseModel):
     psethack: str = 'random particles in phi and r windows'
 
     parameters: ParticleGunParameters = Field(default_factory=ParticleGunParameters)
-
-
